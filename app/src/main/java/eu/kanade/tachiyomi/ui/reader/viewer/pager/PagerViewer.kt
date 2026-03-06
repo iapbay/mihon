@@ -97,7 +97,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
         pager.isVisible = false // Don't layout the pager yet
         pager.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         pager.isFocusable = false
-        pager.offscreenPageLimit = 1
+        pager.offscreenPageLimit = 10
         pager.id = R.id.reader_pager
         pager.adapter = adapter
         pager.addOnPageChangeListener(pagerListener)
