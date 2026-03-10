@@ -36,7 +36,8 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     private val scope = MainScope()
 
     /**
-     * View pager used by this viewer. It's abstract to implement L2R, R2L and vertical pagers on
+     * View pager used by this viewer.
+     * It's abstract to implement L2R, R2L and vertical pagers on
      * top of this class.
      */
     val pager = createPager()
@@ -52,18 +53,21 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     private val adapter = PagerViewerAdapter(this)
 
     /**
-     * Currently active item. It can be a chapter page or a chapter transition.
+     * Currently active item.
+     * It can be a chapter page or a chapter transition.
      */
     private var currentPage: Any? = null
 
     /**
-     * Viewer chapters to set when the pager enters idle mode. Otherwise, if the view was settling
+     * Viewer chapters to set when the pager enters idle mode.
+     * Otherwise, if the view was settling
      * or dragging, there'd be a noticeable and annoying jump.
      */
     private var awaitingIdleViewerChapters: ViewerChapters? = null
 
     /**
-     * Whether the view pager is currently in idle mode. It sets the awaiting chapters if setting
+     * Whether the view pager is currently in idle mode.
+     * It sets the awaiting chapters if setting
      * this field to true.
      */
     private var isIdle = true
@@ -72,6 +76,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             if (value) {
                 awaitingIdleViewerChapters?.let { viewerChapters ->
                     setChaptersInternal(viewerChapters)
+
                     awaitingIdleViewerChapters = null
                     if (viewerChapters.currChapter.pages?.size == 1) {
                         adapter.nextTransition?.to?.let(activity::requestPreloadChapter)
@@ -99,6 +104,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
         pager.isFocusable = false
         pager.offscreenPageLimit = 1
         pager.id = R.id.reader_pager
+
         pager.adapter = adapter
         pager.addOnPageChangeListener(pagerListener)
         pager.tapListener = { event ->
@@ -155,13 +161,63 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
      */
     abstract fun createPager(): Pager
 
+    // --- 极简滑动切页逻辑 开始 ---
+    private var swipeStartX = 0f
+    private var hasSwiped = false
+
+    private val swipeWrapper = object : android.widget.FrameLayout(activity) {
+        override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    swipeStartX = ev.x
+                    hasSwiped = false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (hasSwiped) return true
+                    
+                    val deltaX = ev.x - swipeStartX
+                    if (kotlin.math.abs(deltaX) > 120f) {
+                        hasSwiped = true
+                        
+                        var offset = if (deltaX < 0) 1 else -1
+                        if (this@PagerViewer.javaClass.simpleName.contains("R2L")) {
+                            offset = -offset
+                        }
+                        
+                        val maxPage = (pager.adapter?.count ?: 1) - 1
+                        val target = pager.currentItem + offset
+                        
+                        if (target in 0..maxPage && pager.currentItem != target) {
+                            pager.setCurrentItem(target, false)
+                        }
+                        
+                        val cancelEv = android.view.MotionEvent.obtain(ev)
+                        cancelEv.action = android.view.MotionEvent.ACTION_CANCEL
+                        super.dispatchTouchEvent(cancelEv)
+                        cancelEv.recycle()
+                        return true
+                    }
+                }
+            }
+            return super.dispatchTouchEvent(ev)
+        }
+    }
+
     /**
      * Returns the view this viewer uses.
      */
     override fun getView(): View {
-        return pager
+        if (swipeWrapper.childCount == 0) {
+            swipeWrapper.layoutParams = android.view.ViewGroup.LayoutParams(-1, -1)
+            val parent = pager.parent as? android.view.ViewGroup
+            parent?.removeView(pager)
+            swipeWrapper.addView(pager)
+        }
+        return swipeWrapper
     }
-     /**
+    // --- 极简滑动切页逻辑 结束 ---
+
+    /**
      * Returns the PagerPageHolder for the provided page
      */
     private fun getPageHolder(page: ReaderPage): PagerPageHolder? =
@@ -186,8 +242,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
                         page.number > (currentPage as ReaderPage).number
                     }
                 }
-                currentPage is ChapterTransition.Prev && page is ReaderPage ->
-                    false
+                currentPage is ChapterTransition.Prev && page is ReaderPage -> false
                 else -> true
             }
             currentPage = page
@@ -216,8 +271,10 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             else -> false
         }
     }
+
     /**
-     * Called when a [ReaderPage] is marked as active. It notifies the
+     * Called when a [ReaderPage] is marked as active.
+     * It notifies the
      * activity of the change and requests the preload of the next chapter if this is the last page.
      */
     private fun onReaderPageSelected(page: ReaderPage, allowPreload: Boolean, forward: Boolean) {
@@ -242,7 +299,8 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     }
 
     /**
-     * Called when a [ChapterTransition] is marked as active. It request the
+     * Called when a [ChapterTransition] is marked as active.
+     * It request the
      * preload of the destination chapter of the transition.
      */
     private fun onTransitionSelected(transition: ChapterTransition) {
@@ -258,7 +316,8 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     }
 
     /**
-     * Tells this viewer to set the given [chapters] as active. If the pager is currently idle,
+     * Tells this viewer to set the given [chapters] as active.
+     * If the pager is currently idle,
      * it sets the chapters immediately, otherwise they are saved and set when it becomes idle.
      */
     override fun setChapters(chapters: ViewerChapters) {
@@ -271,6 +330,189 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
 
     /**
      * Sets the active [chapters] on this pager.
+     */
+    private fun setChaptersInternal(chapters: ViewerChapters) {
+        // Remove listener so the change in item doesn't trigger it
+        pager.removeOnPageChangeListener(pagerListener)
+
+        val forceTransition = config.alwaysShowChapterTransition ||
+            adapter.items.getOrNull(pager.currentItem) is ChapterTransition
+        adapter.setChapters(chapters, forceTransition)
+
+        // Layout the pager once a chapter is being set
+        if (pager.isGone) {
+            logcat { "Pager first layout" }
+            val pages = chapters.currChapter.pages ?: return
+            moveToPage(pages[min(chapters.currChapter.requestedPage, pages.lastIndex)])
+            pager.isVisible = true
+        }
+
+        pager.addOnPageChangeListener(pagerListener)
+        // Manually call onPageChange to update the UI
+        onPageChange(pager.currentItem)
+    }
+
+    /**
+     * Tells this viewer to move to the given [page].
+     */
+    override fun moveToPage(page: ReaderPage) {
+        val position = adapter.items.indexOf(page)
+        if (position != -1) {
+            val currentPosition = pager.currentItem
+            pager.setCurrentItem(position, true)
+            // manually call onPageChange since ViewPager listener is not triggered in this case
+            if (currentPosition == position) {
+                onPageChange(position)
+            }
+        } else {
+            logcat { "Page $page not found in adapter" }
+        }
+    }
+
+    /**
+     * Moves to the next page.
+     */
+    open fun moveToNext() {
+        moveRight()
+    }
+
+    /**
+     * Moves to the previous page.
+     */
+    open fun moveToPrevious() {
+        moveLeft()
+    }
+
+    /**
+     * Moves to the page at the right.
+     */
+    protected open fun moveRight() {
+        if (pager.currentItem != adapter.count - 1) {
+            val holder = (currentPage as? ReaderPage)?.let(::getPageHolder)
+            if (holder != null && config.navigateToPan && holder.canPanRight()) {
+                holder.panRight()
+            } else {
+                pager.setCurrentItem(pager.currentItem + 1, config.usePageTransitions)
+            }
+        }
+    }
+
+    /**
+     * Moves to the page at the left.
+     */
+    protected open fun moveLeft() {
+        if (pager.currentItem != 0) {
+            val holder = (currentPage as? ReaderPage)?.let(::getPageHolder)
+            if (holder != null && config.navigateToPan && holder.canPanLeft()) {
+                holder.panLeft()
+            } else {
+                pager.setCurrentItem(pager.currentItem - 1, config.usePageTransitions)
+            }
+        }
+    }
+
+    /**
+     * Moves to the page at the top (or previous).
+     */
+    protected open fun moveUp() {
+        moveToPrevious()
+    }
+
+    /**
+     * Moves to the page at the bottom (or next).
+     */
+    protected open fun moveDown() {
+        moveToNext()
+    }
+
+    /**
+     * Resets the adapter in order to recreate all the views.
+     * Used when a image configuration is
+     * changed.
+     */
+    private fun refreshAdapter() {
+        val currentItem = pager.currentItem
+        adapter.refresh()
+        pager.adapter = adapter
+        pager.setCurrentItem(currentItem, false)
+    }
+
+    /**
+     * Called from the containing activity when a key [event] is received.
+     * It should return true
+     * if the event was handled, false otherwise.
+     */
+    override fun handleKeyEvent(event: KeyEvent): Boolean {
+        val isUp = event.action == KeyEvent.ACTION_UP
+        val ctrlPressed = event.metaState.and(KeyEvent.META_CTRL_ON) > 0
+
+        when (event.keyCode) {
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                if (!config.volumeKeysEnabled || activity.viewModel.state.value.menuVisible) {
+                    return false
+                } else if (isUp) {
+                    if (!config.volumeKeysInverted) moveDown() else moveUp()
+                }
+            }
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                if (!config.volumeKeysEnabled || activity.viewModel.state.value.menuVisible) {
+                    return false
+                } else if (isUp) {
+                    if (!config.volumeKeysInverted) moveUp() else moveDown()
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (isUp) {
+                    if (ctrlPressed) moveToNext() else moveRight()
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                if (isUp) {
+                    if (ctrlPressed) moveToPrevious() else moveLeft()
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> if (isUp) moveDown()
+            KeyEvent.KEYCODE_DPAD_UP -> if (isUp) moveUp()
+            KeyEvent.KEYCODE_PAGE_DOWN -> if (isUp) moveDown()
+            KeyEvent.KEYCODE_PAGE_UP -> if (isUp) moveUp()
+            KeyEvent.KEYCODE_MENU -> if (isUp) activity.toggleMenu()
+            else -> return false
+        }
+        return true
+    }
+
+    /**
+     * Called from the containing activity when a generic motion [event] is received. It should
+     * return true if the event was handled, false otherwise.
+     */
+    override fun handleGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.source and InputDevice.SOURCE_CLASS_POINTER != 0) {
+            when (event.action) {
+                MotionEvent.ACTION_SCROLL -> {
+                    if (event.getAxisValue(MotionEvent.AXIS_VSCROLL) < 0.0f) {
+                        moveDown()
+                    } else {
+                        moveUp()
+                    }
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+    fun onPageSplit(currentPage: ReaderPage, newPage: InsertPage) {
+        activity.runOnUiThread {
+            // Need to insert on UI thread else images will go blank
+            adapter.onPageSplit(currentPage, newPage)
+        }
+    }
+
+    private fun cleanupPageSplit() {
+        adapter.cleanupPageSplit()
+    }
+}
+ * Sets the active [chapters] on this pager.
      */
     private fun setChaptersInternal(chapters: ViewerChapters) {
         // Remove listener so the change in item doesn't trigger it
