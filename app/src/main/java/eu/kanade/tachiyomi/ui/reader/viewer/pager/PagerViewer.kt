@@ -158,9 +158,56 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     /**
      * Returns the view this viewer uses.
      */
-    override fun getView(): View {
-        return pager
+        // --- 极简版：滑动瞬间切页，拒绝拖拽画布 ---
+    private var swipeStartX = 0f
+    private var hasSwiped = false
+
+    private val swipeWrapper = object : android.widget.FrameLayout(activity) {
+        override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    swipeStartX = ev.x
+                    hasSwiped = false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (hasSwiped) return true // 一次滑动只切一页，吞掉多余的手势
+                    
+                    val deltaX = ev.x - swipeStartX
+                    if (kotlin.math.abs(deltaX) > 100f) { // 手指横向滑动超过 100 像素，瞬间触发切页
+                        hasSwiped = true
+                        
+                        var offset = if (deltaX < 0) 1 else -1 // 左滑下一页，右滑上一页
+                        if (this@PagerViewer.javaClass.simpleName.contains("R2L")) offset = -offset
+                        
+                        val target = (pager.currentItem + offset).coerceIn(0, java.lang.Math.max(0, (pager.adapter?.count ?: 1) - 1))
+                        if (pager.currentItem != target) {
+                            pager.setCurrentItem(target, false) // 魔法核心：false 代表无过渡动画，瞬间切帧
+                        }
+                        
+                        // 强制打断底层原生的“粘连拖拽”
+                        val cancelEv = android.view.MotionEvent.obtain(ev).apply { action = android.view.MotionEvent.ACTION_CANCEL }
+                        super.dispatchTouchEvent(cancelEv)
+                        cancelEv.recycle()
+                        return true
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    hasSwiped = false
+                }
+            }
+            return super.dispatchTouchEvent(ev)
+        }
     }
+
+    override fun getView(): android.view.View {
+        if (swipeWrapper.childCount == 0) {
+            swipeWrapper.layoutParams = android.view.ViewGroup.LayoutParams(-1, -1)
+            (pager.parent as? android.view.ViewGroup)?.removeView(pager)
+            swipeWrapper.addView(pager)
+        }
+        return swipeWrapper
+    }
+
 
     /**
      * Returns the PagerPageHolder for the provided page
