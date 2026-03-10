@@ -158,65 +158,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     /**
      * Returns the view this viewer uses.
      */
-          private var swipeStartX = 0f
-    private var hasSwiped = false
-
-    private val swipeWrapper = object : android.widget.FrameLayout(activity) {
-        override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
-            when (ev.actionMasked) {
-                android.view.MotionEvent.ACTION_DOWN -> {
-                    swipeStartX = ev.x
-                    hasSwiped = false
-                }
-                android.view.MotionEvent.ACTION_MOVE -> {
-                    if (hasSwiped) return true
-                    
-                    val deltaX = ev.x - swipeStartX
-                    if (kotlin.math.abs(deltaX) > 100f) {
-                        hasSwiped = true
-                        
-                        var offset = if (deltaX < 0) 1 else -1
-                        if (this@PagerViewer.javaClass.simpleName.contains("R2L")) {
-                            offset = -offset
-                        }
-                        
-                        val maxPage = java.lang.Math.max(0, (pager.adapter?.count ?: 1) - 1)
-                        val target = (pager.currentItem + offset).coerceIn(0, maxPage)
-                        
-                        if (pager.currentItem != target) {
-                            pager.setCurrentItem(target, false)
-                        }
-                        
-                        // 完全按照机器人要求的变态排版：
-                        val cancelEv = android.view.MotionEvent.obtain(ev).apply {
-                            action =
-                                android.view.MotionEvent.ACTION_CANCEL
-                        }
-                        super.dispatchTouchEvent(cancelEv)
-                        cancelEv.recycle()
-                        return true
-                    }
-                }
-                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
-                    hasSwiped = false
-                }
-            }
-            return super.dispatchTouchEvent(ev)
-        }
-    }
-
-    override fun getView(): android.view.View {
-        if (swipeWrapper.childCount == 0) {
-            swipeWrapper.layoutParams = android.view.ViewGroup.LayoutParams(-1, -1)
-            val parent = pager.parent as? android.view.ViewGroup
-            parent?.removeView(pager)
-            swipeWrapper.addView(pager)
-        }
-        return swipeWrapper
-    }
-
-
-
+         
     /**
      * Returns the PagerPageHolder for the provided page
      */
@@ -272,7 +214,6 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
             else -> false
         }
     }
-
     /**
      * Called when a [ReaderPage] is marked as active. It notifies the
      * activity of the change and requests the preload of the next chapter if this is the last page.
