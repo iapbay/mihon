@@ -158,8 +158,10 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
     /**
      * Returns the view this viewer uses.
      */
-         
-    /**
+    override fun getView(): View {
+        return pager
+    }
+     /**
      * Returns the PagerPageHolder for the provided page
      */
     private fun getPageHolder(page: ReaderPage): PagerPageHolder? =
