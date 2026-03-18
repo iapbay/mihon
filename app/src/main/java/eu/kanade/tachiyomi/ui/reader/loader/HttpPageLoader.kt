@@ -41,7 +41,7 @@ internal class HttpPageLoader(
      */
     private val queue = PriorityBlockingQueue<PriorityPage>()
 
-    private val preloadSize = 15
+    private val preloadSize = 10
 
     init {
         scope.launchIO {
