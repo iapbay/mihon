@@ -259,6 +259,7 @@ class ReaderPreferences(
         FADE_WHITE(
             MR.strings.transition_animation_fade_white,
         ),
+        NONE(MR.strings.transition_animation_none),
     }
 
     enum class CutoutMode(val titleRes: StringResource) {
@@ -295,6 +296,13 @@ class ReaderPreferences(
             MR.strings.scale_type_fit_height,
             MR.strings.scale_type_original_size,
             MR.strings.scale_type_smart_fit,
+        )
+
+        val ImageScaleTypeWebGpuViewer = listOf(
+            MR.strings.scale_type_fit_screen,
+            MR.strings.scale_type_fit_width,
+            MR.strings.scale_type_fit_height,
+            MR.strings.scale_type_original_size,
         )
 
         val ZoomStart = listOf(

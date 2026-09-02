@@ -62,10 +62,10 @@ class CrashLogUtil(
         """.trimIndent()
     }
 
-    private fun getExtensionsInfo(): String? {
+    private suspend fun getExtensionsInfo(): String? {
         val availableExtensions = extensionManager.availableExtensionsFlow.value.associateBy { it.pkgName }
 
-        val extensionInfoList = extensionManager.installedExtensionsFlow.value
+        val extensionInfoList = extensionManager.getInstalledExtensions()
             .sortedBy { it.name }
             .mapNotNull {
                 val availableExtension = availableExtensions[it.pkgName]
