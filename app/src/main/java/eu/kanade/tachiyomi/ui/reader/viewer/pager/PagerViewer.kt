@@ -111,7 +111,7 @@ abstract class PagerViewer(val activity: ReaderActivity) : Viewer {
         pager.layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT)
         pager.isFocusable = false
         pager.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-        pager.offscreenPageLimit = 1
+        pager.offscreenPageLimit = 6
         pager.id = R.id.reader_pager
         pager.adapter = adapter
         pager.addOnPageChangeListener(pagerListener)
