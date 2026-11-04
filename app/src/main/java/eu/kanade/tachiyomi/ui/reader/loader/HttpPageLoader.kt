@@ -262,4 +262,4 @@ internal class HttpPageLoader(
     }
 }
 
-private const val LIMITED_PAGES_AHEAD = 15
+private const val LIMITED_PAGES_AHEAD = 5
